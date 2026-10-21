@@ -322,6 +322,10 @@ impl Agent {
             _ => bail!("No return value from '_instructions' function"),
         }
     }
+
+    pub fn set_rag(&mut self, rag: Option<Arc<Rag>>) {
+        self.rag = rag;
+    }
 }
 
 impl RoleLike for Agent {

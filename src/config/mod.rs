@@ -1342,9 +1342,6 @@ impl Config {
         rag: Option<&str>,
         abort_signal: AbortSignal,
     ) -> Result<()> {
-        if config.read().agent.is_some() {
-            bail!("Cannot perform this operation because you are using a agent")
-        }
         let rag = match rag {
             None => {
                 let rag_path = config.read().rag_file(TEMP_RAG_NAME);
@@ -1356,7 +1353,10 @@ impl Config {
                 Rag::init(config, TEMP_RAG_NAME, &rag_path, &[], abort_signal).await?
             }
             Some(name) => {
-                let rag_path = config.read().rag_file(name);
+                let mut rag_path = config.read().rag_file(name);
+                if !rag_path.exists() {
+                    rag_path = Config::rags_dir().join(format!("{name}.yaml"))
+                }
                 if !rag_path.exists() {
                     if config.read().working_mode.is_cmd() {
                         bail!("Unknown RAG '{name}'")
@@ -1367,7 +1367,16 @@ impl Config {
                 }
             }
         };
-        config.write().rag = Some(Arc::new(rag));
+
+        let arc_rag = Arc::new(rag);
+
+        if let Some(agent) = &mut config.write().agent {
+            let arc_rag_clone = Arc::clone(&arc_rag);
+            agent.set_rag(Some(arc_rag_clone));
+        }
+
+        config.write().rag = Some(arc_rag);
+
         Ok(())
     }
 
@@ -1438,6 +1447,9 @@ impl Config {
     }
 
     pub fn exit_rag(&mut self) -> Result<()> {
+        if let Some(agent) = &mut self.agent {
+            agent.set_rag(None);
+        }
         self.rag.take();
         Ok(())
     }
